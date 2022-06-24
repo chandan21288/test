@@ -1,0 +1,13 @@
+---
+- Update and reboot
+  hosts: all
+  gather_facts: no
+  tasks:
+    - name: Upgrade all packages
+      yum:
+        name: '*'
+        state: latest
+    - name: Reboot servers
+      reboot:
+        pre_reboot_delay: 90
+        msg: "server will be rebooted sucessfully"
