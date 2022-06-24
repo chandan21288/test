@@ -1,5 +1,5 @@
 ---
-- Update and reboot
+- name: Update and reboot
   hosts: all
   gather_facts: no
   tasks:
