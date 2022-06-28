@@ -1,1 +1,17 @@
-
+---
+plugin: aws_ec2
+regions:
+ - us-east-1
+filters:
+  tag:target:
+    - linux
+    - win
+instance-state-name : running
+keyed_groups:
+  - key: tags.target
+    prefix: instance
+groups:
+  linux: "'linux' in (tag|list)"
+  win: "'win' in (tag|list)"
+compose:
+  ansible_host: private_ip_address
