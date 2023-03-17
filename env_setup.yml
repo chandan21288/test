@@ -1,0 +1,12 @@
+---
+- name: adding env vers to the user profile
+  hosts: all
+  tasks:
+   - name: Set env variable
+     lineinfile:
+       path: /home/ansible/.bashrc
+       line: export AGENTNAME=ansible | export AGENTNAME=$(echo $AGENTNAME | tr '[:upper:]' '[:lower:]') | export STAGE=Sandbox|Integration|Production | export STAGE_LC=$(echo $STAGE | tr '[:upper:]' '[:lower:]') |export TOKEN=%TOKEN% 
+   - name: Test env variable
+     shell: . /home/ansible/.bashrc && echo $MY_VAR
+     register: mytestenv
+   - debug: var=mytestenv
