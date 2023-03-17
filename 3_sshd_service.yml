@@ -1,0 +1,19 @@
+# 3.Create an ansible playbook which will replace one line in a config file and restart sshd service
+ (must use handlers for this) Old line: X11Forwarding no New line: X11Forwarding yes
+
+---
+- name: replace one line in a config file and restart sshd service
+  hosts: node1
+  tasks:
+    - name: replace one line in a config file and restart sshd service
+      lineinfile: 
+        path: /etc/ssh/sshd_config
+        regexp: '^(.*)X11Forwarding no(.*)$'
+        line: 'X11Forwarding yes'
+      notify: restart sshd service
+       
+  handlers:
+    - name: restart sshd service
+      service: 
+        name: sshd
+        state: restarted

@@ -1,0 +1,57 @@
+
+#Initialize ansible role and write tasks from below points. install.yml Should install httpd package config.yml Should copy config file 
+#kept in files/httpd.conf to node1 /etc/httpd/conf/httpd.conf service.yml Should start the httpd.service (should use handlers)
+    
+---
+-name: http installation
+ hosts: node1
+ tasks:
+   - name: install httpd service
+     include_role:
+       name: install.yml
+     notify: restart httpd service
+   - name: copy config file
+     include_role: 
+       name: config.yml
+     notify: restart httpd service
+     
+ handlers:
+   - name: restart http service
+     include_role:
+       name: service.yml
+  
+     
+     
+     
+     
+     
+     
+     
+     
+     
+     
+#############################Roles###########################
+----
+- name: install.yml
+  yum:
+    name: httpd
+    state: latest
+
+
+#########################config.yml###########################
+---
+- name: copy config file
+  copy:
+    src: files/httpd.conf
+    dest: /etc/httpd/conf/httpd.conf
+    remote_src: yes  
+    
+    
+#################service.yml#####################
+---
+- name: restart httpd service
+  service: 
+    name: httpd
+    state: started
+    enable: yes
+    

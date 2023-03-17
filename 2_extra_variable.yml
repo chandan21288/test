@@ -1,0 +1,14 @@
+#2. Create an ansible playbook to which accept an extra variable to be passed to create a new file with the line as input "This is a test line"
+---
+- name: create a new file with the line as input
+  hosts: node1
+  become: true
+  tasks:
+    - name: create a file with content
+      file:
+        path: /opt/new.txt
+        state: touch
+        content: "{{ input }}"
+
+
+#here --extra-ver="input=This is a test line" 
