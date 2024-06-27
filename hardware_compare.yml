@@ -1,0 +1,151 @@
+---
+- name: Collect Disk Space Information for Specific Mount Points
+  hosts: all
+  gather_facts: yes
+  vars:
+    mount_points:
+      - /tmp
+      - /var
+      - /var/log
+      - /space
+      - /opt/IBM
+      - /home/nxf70775
+  tasks:
+    - name: Ensure the directory exists for each application
+      ansible.builtin.file:
+        path: "/space/test/{{ env }}/{{ item.name }}"
+        state: directory
+        mode: '0755'
+        owner: abc
+        group: abc
+      delegate_to: localhost
+      loop: "{{ applications }}"
+      ignore_errors: yes
+
+    - name: Gather system information
+      ansible.builtin.setup:
+
+    - name: Gather disk space information for specified mount points
+      ansible.builtin.command: df -h {{ item }}
+      register: df_output
+      loop: "{{ mount_points }}"
+      changed_when: false
+
+    - name: Structure disk usage output for each mount point
+      set_fact:
+        disk_usage: >-
+          {{
+            disk_usage | default({}) | combine({
+              item.item: {
+                'Size': item.stdout_lines[1].split()[1],
+                'Used': item.stdout_lines[1].split()[2],
+                'Available': item.stdout_lines[1].split()[3],
+              }
+            })
+          }}
+      loop: "{{ df_output.results }}"
+
+    - name: Prepare mapping of directories to applications
+      set_fact:
+        dir_to_app_map: "{{ dict(elm_dirs | zip(applications | map(attribute='name'))) }}"
+      ignore_errors: yes
+
+    - name: Get the size of each 'indices' directory within /opt/IBM/ and map to application
+      ansible.builtin.shell: "du -sh /opt/IBM/{{ item }}/server/conf/*/indices | awk '{print $1}'"
+      loop: "{{ elm_dirs }}"
+      register: indices_sizes
+      ignore_errors: yes
+
+    - name: Associate indices sizes with applications
+      set_fact:
+        indices_sizes_with_apps: >-
+          {{
+            indices_sizes_with_apps | default({})
+            | combine({
+                dir_to_app_map[item.item]: (item.stdout | default('NA', true) if item.stdout != '' else 'NA')
+              }, recursive=true)
+          }}
+      loop: "{{ indices_sizes.results }}"
+      vars:
+        dir_to_app_map: "{{ dict(elm_dirs | zip(applications | map(attribute='name'))) }}"
+      ignore_errors: yes
+
+    - name: Calculate the size of index directories with and without history
+      ansible.builtin.shell: |
+        total_size=0
+        total_size_no_history=0
+        historyTdb_present=false
+        for dir in indexTdb textIndex shapeTdb versionTdb historyTdb; do
+          dir_path="/opt/IBM/{{ item }}/server/conf/*/$dir"
+          if ls $dir_path 1> /dev/null 2>&1; then
+            if [ "$dir" = "historyTdb" ]; then
+              historyTdb_present=true
+            fi
+            size=$(du -sBG $dir_path | awk '{print $1}' | grep -o '[0-9]*')
+            total_size=$((total_size + size))
+            if [ "$dir" != "historyTdb" ]; then
+              total_size_no_history=$((total_size_no_history + size))
+            fi
+          fi
+        done
+        echo "{\"total_including_history\": \"${total_size}G\", \"total_excluding_history\": \"${total_size_no_history}G\"}"
+      register: index_sizes_with_history
+      loop: "{{ elm_dirs }}"
+      ignore_errors: yes
+
+    - name: Associate index sizes with applications
+      set_fact:
+        index_sizes_with_apps: >-
+          {{
+            index_sizes_with_apps | default({})
+            | combine({
+              dir_to_app_map[item.item]: {
+                'total_including_history': (item.stdout | from_json).total_including_history | regex_replace('^0G$', 'NA'),
+                'total_excluding_history': (item.stdout | from_json).total_excluding_history | regex_replace('^0G$', 'NA')
+              }
+            }, recursive=true)
+          }}
+      loop: "{{ index_sizes_with_history.results }}"
+      vars:
+        dir_to_app_map: "{{ dict(elm_dirs | zip(applications | map(attribute='name'))) }}"
+      ignore_errors: yes
+
+    - name: Structure system information
+      set_fact:
+        indices_directories: "{{ indices_sizes_with_apps }}"
+      ignore_errors: yes
+    - name: Structure system information
+      set_fact:
+        index_directories_sizes: "{{ index_sizes_with_apps }}"
+      ignore_errors: yes
+
+
+    - name: Structure system information
+      set_fact:
+        system_info:
+          disk_usage: "{{ disk_usage }}"
+          ram:
+            Size: "{{ (ansible_memtotal_mb / 1024) | round(2, 'floor') }} GB"
+            Used: "{{ ((ansible_memtotal_mb - ansible_memfree_mb) / 1024) | round(2, 'floor') }} GB"
+            Available: "{{ (ansible_memfree_mb / 1024) | round(2, 'floor') }} GB"
+          cpu:
+            cores: "{{ ansible_processor_cores }}"
+            model: "{{ ansible_processor[1] }}"
+          os:
+            distribution: "{{ ansible_distribution }}"
+            version: "{{ ansible_distribution_version }}"
+          indices_directories: "{{ indices_sizes_with_apps }}"
+          index_directories_sizes: "{{ index_sizes_with_apps }}"
+      ignore_errors: yes
+
+    - name: Debug structured disk usage
+      debug:
+        var: system_info
+
+    - name: Store hw_output.yml for each application
+      ansible.builtin.copy:
+        content: "{{ hostvars[inventory_hostname].system_info | to_nice_yaml }}"
+        dest: "/space/test/{{ env }}/{{ item.name }}/hw_output.yml"
+      delegate_to: localhost
+      loop: "{{ applications }}"
+      ignore_errors: yes
